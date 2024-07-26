@@ -57,27 +57,24 @@ class FilesController {
       }
     }
     if (type === 'folder') {
-      files
-        .insertOne({
+      files.insertOne(
+        {
           userId: user._id,
           name,
           type,
           parentId: parentId || 0,
           isPublic,
-        })
-        .then((result) =>
-          response.status(201).json({
-            id: result.insertedId,
-            userId: user._id,
-            name,
-            type,
-            isPublic,
-            parentId: parentId || 0,
-          })
-        )
-        .catch((error) => {
-          console.log(error);
-        });
+        },
+      ).then((result) => response.status(201).json({
+        id: result.insertedId,
+        userId: user._id,
+        name,
+        type,
+        isPublic,
+        parentId: parentId || 0,
+      })).catch((error) => {
+        console.log(error);
+      });
     } else {
       const filePath = process.env.FOLDER_PATH || '/tmp/files_manager';
       const fileName = `${filePath}/${uuidv4()}`;
@@ -87,38 +84,41 @@ class FilesController {
         try {
           await fs.mkdir(filePath);
         } catch (error) {
-          // pass. Error raised when file already exists
+        // pass. Error raised when file already exists
         }
         await fs.writeFile(fileName, buff, 'utf-8');
       } catch (error) {
         console.log(error);
       }
-      files
-        .insertOne({
+      files.insertOne(
+        {
           userId: user._id,
           name,
           type,
           isPublic,
           parentId: parentId || 0,
           localPath: fileName,
-        })
-        .then((result) => {
-          response.status(201).json({
+        },
+      ).then((result) => {
+        response.status(201).json(
+          {
             id: result.insertedId,
             userId: user._id,
             name,
             type,
             isPublic,
             parentId: parentId || 0,
-          });
-          if (type === 'image') {
-            fileQueue.add({
+          },
+        );
+        if (type === 'image') {
+          fileQueue.add(
+            {
               userId: user._id,
               fileId: result.insertedId,
-            });
-          }
-        })
-        .catch((error) => console.log(error));
+            },
+          );
+        }
+      }).catch((error) => console.log(error));
     }
     return null;
   }
@@ -143,7 +143,10 @@ class FilesController {
     if (!user) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
-    const { parentId, page } = request.query;
+    const {
+      parentId,
+      page,
+    } = request.query;
     const pageNum = page || 0;
     const files = dbClient.db.collection('files');
     let query;
@@ -152,37 +155,34 @@ class FilesController {
     } else {
       query = { userId: user._id, parentId: ObjectID(parentId) };
     }
-    files
-      .aggregate([
+    files.aggregate(
+      [
         { $match: query },
         { $sort: { _id: -1 } },
         {
           $facet: {
-            metadata: [
-              { $count: 'total' },
-              { $addFields: { page: parseInt(pageNum, 10) } },
-            ],
+            metadata: [{ $count: 'total' }, { $addFields: { page: parseInt(pageNum, 10) } }],
             data: [{ $skip: 20 * parseInt(pageNum, 10) }, { $limit: 20 }],
           },
         },
-      ])
-      .toArray((err, result) => {
-        if (result) {
-          const final = result[0].data.map((file) => {
-            const tmpFile = {
-              ...file,
-              id: file._id,
-            };
-            delete tmpFile._id;
-            delete tmpFile.localPath;
-            return tmpFile;
-          });
-          // console.log(final);
-          return response.status(200).json(final);
-        }
-        console.log('Error occured');
-        return response.status(404).json({ error: 'Not found' });
-      });
+      ],
+    ).toArray((err, result) => {
+      if (result) {
+        const final = result[0].data.map((file) => {
+          const tmpFile = {
+            ...file,
+            id: file._id,
+          };
+          delete tmpFile._id;
+          delete tmpFile.localPath;
+          return tmpFile;
+        });
+        // console.log(final);
+        return response.status(200).json(final);
+      }
+      console.log('Error occured');
+      return response.status(404).json({ error: 'Not found' });
+    });
     return null;
   }
 
@@ -196,17 +196,12 @@ class FilesController {
     const idObject = new ObjectID(id);
     const newValue = { $set: { isPublic: true } };
     const options = { returnOriginal: false };
-    files.findOneAndUpdate(
-      { _id: idObject, userId: user._id },
-      newValue,
-      options,
-      (err, file) => {
-        if (!file.lastErrorObject.updatedExisting) {
-          return response.status(404).json({ error: 'Not found' });
-        }
-        return response.status(200).json(file.value);
+    files.findOneAndUpdate({ _id: idObject, userId: user._id }, newValue, options, (err, file) => {
+      if (!file.lastErrorObject.updatedExisting) {
+        return response.status(404).json({ error: 'Not found' });
       }
-    );
+      return response.status(200).json(file.value);
+    });
     return null;
   }
 
@@ -220,17 +215,12 @@ class FilesController {
     const idObject = new ObjectID(id);
     const newValue = { $set: { isPublic: false } };
     const options = { returnOriginal: false };
-    files.findOneAndUpdate(
-      { _id: idObject, userId: user._id },
-      newValue,
-      options,
-      (err, file) => {
-        if (!file.lastErrorObject.updatedExisting) {
-          return response.status(404).json({ error: 'Not found' });
-        }
-        return response.status(200).json(file.value);
+    files.findOneAndUpdate({ _id: idObject, userId: user._id }, newValue, options, (err, file) => {
+      if (!file.lastErrorObject.updatedExisting) {
+        return response.status(404).json({ error: 'Not found' });
       }
-    );
+      return response.status(200).json(file.value);
+    });
     return null;
   }
 
@@ -245,9 +235,7 @@ class FilesController {
       console.log(file.localPath);
       if (file.isPublic) {
         if (file.type === 'folder') {
-          return response
-            .status(400)
-            .json({ error: "A folder doesn't have content" });
+          return response.status(400).json({ error: "A folder doesn't have content" });
         }
         try {
           let fileName = file.localPath;
@@ -257,10 +245,7 @@ class FilesController {
           }
           const data = await fs.readFile(fileName);
           const contentType = mime.contentType(file.name);
-          return response
-            .header('Content-Type', contentType)
-            .status(200)
-            .send(data);
+          return response.header('Content-Type', contentType).status(200).send(data);
         } catch (error) {
           console.log(error);
           return response.status(404).json({ error: 'Not found' });
@@ -272,9 +257,7 @@ class FilesController {
         }
         if (file.userId.toString() === user._id.toString()) {
           if (file.type === 'folder') {
-            return response
-              .status(400)
-              .json({ error: "A folder doesn't have content" });
+            return response.status(400).json({ error: "A folder doesn't have content" });
           }
           try {
             let fileName = file.localPath;
@@ -283,18 +266,13 @@ class FilesController {
               fileName = `${file.localPath}_${size}`;
             }
             const contentType = mime.contentType(file.name);
-            return response
-              .header('Content-Type', contentType)
-              .status(200)
-              .sendFile(fileName);
+            return response.header('Content-Type', contentType).status(200).sendFile(fileName);
           } catch (error) {
             console.log(error);
             return response.status(404).json({ error: 'Not found' });
           }
         } else {
-          console.log(
-            `Wrong user: file.userId=${file.userId}; userId=${user._id}`
-          );
+          console.log(`Wrong user: file.userId=${file.userId}; userId=${user._id}`);
           return response.status(404).json({ error: 'Not found' });
         }
       }
